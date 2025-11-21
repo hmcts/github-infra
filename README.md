@@ -131,7 +131,7 @@ Changes merged to the `main` branch will automatically trigger a plan and apply.
 
 ## 📦 Dependencies
 
-This project uses the following modules:
+This project uses the following modules and providers:
 
 - [terraform-module-azure-virtual-networking](https://github.com/hmcts/terraform-module-azure-virtual-networking) - VNet and subnet management
 - [terraform-module-vnet-peering](https://github.com/hmcts/terraform-module-vnet-peering) - VNet peering configuration
@@ -150,3 +150,280 @@ Each environment has its own configuration in `environments/<env>/<env>.tfvars`.
 The network component exports:
 
 - `github_id`: The GitHub ID from the network settings resource
+
+## 🔧 Post-Deployment Configuration
+
+After the Terraform infrastructure has been successfully deployed, you need to create the network configuration in GitHub and associate it with runner groups.
+
+> **Note**: While the Terraform GitHub provider does not yet have dedicated resources for `network-configurations`, you can use the `github_app_token` data source to automate API calls via `local-exec` provisioners. Track native resource support at [terraform-provider-github](https://github.com/integrations/terraform-provider-github).
+
+### Automation Options
+
+You have three options for completing this configuration:
+
+1. **Semi-Automated (Recommended)**: Use Terraform's `github_app_token` data source with `null_resource` and `local-exec` to make API calls (see Option B below)
+2. **Manual via Web UI**: Complete configuration through GitHub's web interface (see Option A below)
+3. **Manual via API**: Use curl commands with a personal access token
+
+### Step 1: Retrieve the Network Settings ID
+
+After Terraform applies successfully, retrieve the network settings ID from the output:
+
+```bash
+cd components/network
+terraform output github_id
+```
+
+This will return a value like: `EC486D5D793175D7E3B29C27318D5C1AAE49A7833FC85F2E82C3D2C54AC7D3BA`
+
+Save this value - you'll need it in the next steps.
+
+### Step 2: Create Network Configuration in GitHub
+
+#### Option A: Via GitHub Web UI (Recommended for initial setup)
+
+1. Navigate to your GitHub Enterprise or Organization settings:
+   - **Enterprise**: `https://github.com/enterprises/{enterprise-name}/settings/hosted-compute-networking`
+   - **Organization**: `https://github.com/organizations/{org-name}/settings/hosted-compute-networking`
+
+2. Click **"New network configuration"** dropdown
+3. Select **"Azure private network"**
+4. Configure the network:
+   - **Name**: `hmcts-{env}-network-config` (e.g., `hmcts-sbox-network-config`)
+   - **Azure Virtual Network**: Paste the network settings ID from Step 1
+5. Click **"Add Azure Virtual Network"**
+6. Click **"Create network configuration"**
+
+#### Option B: Via GitHub REST API
+
+You can also create the network configuration using the GitHub REST API. If you're using GitHub App authentication (recommended), you can leverage Terraform's `github_app_token` data source to generate the token:
+
+**Using GitHub App Authentication (Recommended):**
+
+Add this to your Terraform configuration:
+
+```hcl
+# In a separate github-config.tf file or at the end of network.tf
+
+data "github_app_token" "github_token" {
+  app_id          = var.github_app_id          # or from env: GITHUB_APP_ID
+  installation_id = var.github_app_installation_id  # or from env: GITHUB_APP_INSTALLATION_ID
+  pem_file        = var.github_app_pem_file    # or from env: GITHUB_APP_PEM_FILE
+}
+
+resource "null_resource" "github_network_configuration" {
+  triggers = {
+    network_settings_id = jsondecode(azapi_resource.network_settings.output).tags.GitHubId
+    env                 = var.env
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      RESPONSE=$(curl -s -L \
+        -X POST \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${data.github_app_token.github_token.token}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        https://api.github.com/orgs/${var.github_org}/settings/network-configurations \
+        -d '{
+          "name": "hmcts-${var.env}-network-config",
+          "network_settings_ids": ["${jsondecode(azapi_resource.network_settings.output).tags.GitHubId}"],
+          "compute_service": "actions"
+        }')
+      
+      echo "Network configuration created:"
+      echo "$RESPONSE"
+      echo "$RESPONSE" > network-config-${var.env}.json
+    EOT
+  }
+
+  depends_on = [azapi_resource.network_settings]
+}
+```
+
+**Using Personal Access Token:**
+
+```bash
+# Set your variables
+GITHUB_TOKEN="your_github_token"
+GITHUB_ORG="your_org_name"
+NETWORK_SETTINGS_ID="your_network_settings_id_from_step_1"
+ENV="sbox"  # or nonprod, prod
+
+# Create network configuration
+curl -L \
+  -X POST \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  https://api.github.com/orgs/${GITHUB_ORG}/settings/network-configurations \
+  -d '{
+    "name": "hmcts-'${ENV}'-network-config",
+    "network_settings_ids": ["'${NETWORK_SETTINGS_ID}'"],
+    "compute_service": "actions"
+  }'
+```
+
+Save the `id` returned in the response - you'll need it for associating with runner groups.
+
+### Complete Terraform Automation Example
+
+If you want to fully automate this process, here's a complete example you can add to your configuration:
+
+```hcl
+# variables.tf - Add these variables
+variable "github_org" {
+  description = "GitHub organization name"
+  type        = string
+  default     = "hmcts"
+}
+
+variable "github_app_id" {
+  description = "GitHub App ID for API authentication"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_app_installation_id" {
+  description = "GitHub App Installation ID"
+  type        = string
+  sensitive   = true
+}
+
+variable "github_app_pem_file" {
+  description = "GitHub App PEM file contents"
+  type        = string
+  sensitive   = true
+}
+
+# github-automation.tf - Create this new file
+data "github_app_token" "automation" {
+  app_id          = var.github_app_id
+  installation_id = var.github_app_installation_id
+  pem_file        = var.github_app_pem_file
+}
+
+resource "null_resource" "github_network_config" {
+  triggers = {
+    network_settings_id = jsondecode(azapi_resource.network_settings.output).tags.GitHubId
+    env                 = var.env
+    org                 = var.github_org
+  }
+
+  provisioner "local-exec" {
+    command = <<-EOT
+      set -e
+      
+      echo "Creating GitHub network configuration..."
+      
+      RESPONSE=$(curl -s -w "\n%{http_code}" -L \
+        -X POST \
+        -H "Accept: application/vnd.github+json" \
+        -H "Authorization: Bearer ${data.github_app_token.automation.token}" \
+        -H "X-GitHub-Api-Version: 2022-11-28" \
+        https://api.github.com/orgs/${var.github_org}/settings/network-configurations \
+        -d '{
+          "name": "hmcts-${var.env}-network-config",
+          "network_settings_ids": ["${jsondecode(azapi_resource.network_settings.output).tags.GitHubId}"],
+          "compute_service": "actions"
+        }')
+      
+      HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+      BODY=$(echo "$RESPONSE" | sed '$d')
+      
+      if [ "$HTTP_CODE" -eq 201 ]; then
+        echo "✅ Network configuration created successfully"
+        echo "$BODY" | jq '.'
+        echo "$BODY" > "${path.module}/network-config-${var.env}.json"
+      else
+        echo "❌ Failed to create network configuration (HTTP $HTTP_CODE)"
+        echo "$BODY" | jq '.' || echo "$BODY"
+        exit 1
+      fi
+    EOT
+    
+    interpreter = ["bash", "-c"]
+  }
+
+  provisioner "local-exec" {
+    when    = destroy
+    command = <<-EOT
+      echo "Note: Network configuration should be deleted via GitHub UI or API"
+      echo "Network config ID is in network-config-${self.triggers.env}.json"
+    EOT
+  }
+
+  depends_on = [azapi_resource.network_settings]
+}
+
+output "network_config_file" {
+  description = "Path to the network configuration response file"
+  value       = "${path.module}/network-config-${var.env}.json"
+}
+```
+
+**Setting up environment variables for CI/CD:**
+
+```bash
+# In your Azure DevOps pipeline or local environment
+export GITHUB_APP_ID="your-app-id"
+export GITHUB_APP_INSTALLATION_ID="your-installation-id"
+export GITHUB_APP_PEM_FILE="$(cat your-app-private-key.pem)"
+
+# Or store in Azure DevOps Library as secure variables
+```
+
+**Required permissions for the GitHub App:**
+
+The GitHub App needs the following permissions:
+- **Organization permissions**:
+  - Actions: Read and write
+  - Network configurations: Read and write
+  - Self-hosted runners: Read and write
+
+### Step 3: Create or Update Runner Groups
+
+#### Via GitHub Web UI
+
+1. Navigate to Actions runner groups:
+   - **Enterprise**: `https://github.com/enterprises/{enterprise-name}/settings/actions/runner-groups`
+   - **Organization**: `https://github.com/organizations/{org-name}/settings/actions/runner-groups`
+
+2. Either create a new runner group or edit an existing one:
+   - Click **"New runner group"** or **"Edit"** on an existing group
+   - Configure the runner group settings (name, visibility, repository access)
+   - Under **"Network configurations"**, select the network configuration you created in Step 2
+   - Click **"Create group"** or **"Update group"**
+
+#### Via GitHub REST API
+
+```bash
+# Set your variables
+GITHUB_TOKEN="your_github_token"
+GITHUB_ORG="your_org_name"
+NETWORK_CONFIG_ID="network_config_id_from_step_2"
+
+# Create a new runner group with network configuration
+curl -L \
+  -X POST \
+  -H "Accept: application/vnd.github+json" \
+  -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+  -H "X-GitHub-Api-Version: 2022-11-28" \
+  https://api.github.com/orgs/${GITHUB_ORG}/actions/runner-groups \
+  -d '{
+    "name": "hmcts-private-runners",
+    "visibility": "all",
+    "allows_public_repositories": false,
+    "network_configuration_id": "'${NETWORK_CONFIG_ID}'"
+  }'
+```
+
+### Step 4: Add GitHub-Hosted Runners
+
+1. Navigate to the runner group you configured in Step 3
+2. Add GitHub-hosted runners to the group
+3. The runners will now use the private network configuration and route traffic through your Azure VNet
+
+For more details, see:
+- [GitHub Docs: Configuring private networking for GitHub-hosted runners](https://docs.github.com/en/enterprise-cloud@latest/admin/configuration/configuring-private-networking-for-hosted-compute-products/configuring-private-networking-for-github-hosted-runners-in-your-enterprise)
+- [GitHub REST API: Network configurations](https://docs.github.com/en/rest/orgs/network-configurations)

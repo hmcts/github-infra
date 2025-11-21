@@ -39,6 +39,11 @@ parameters:
         component: "network"
         service_connection: "HMCTS-HUB-SBOX-INTSVC"
         dependsOn: "Precheck"
+      - deployment: "nonprod_github_network"
+        environment: "nonprod"
+        component: "network"
+        service_connection: "HMCTS-HUB-NONPROD-INTSVC"
+        dependsOn: "Precheck"
 
 variables:
   - name: timeoutInMinutes
