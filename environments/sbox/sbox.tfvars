@@ -9,6 +9,6 @@ next_hop_ip_address     = "10.10.200.36"
 env                     = "sbox"
 
 key_vault = {
-  name    = "hmcts-infra-dmz-nonprodi"
-  rg_name = "hmcts-infra-dmz-nonprodi"
+  name    = "hmcts-infra-dmz-sbox-int"
+  rg_name = "hmcts-infra-dmz-sbox-int"
 }
