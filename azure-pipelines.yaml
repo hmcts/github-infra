@@ -40,7 +40,7 @@ parameters:
         service_connection: "HMCTS-HUB-SBOX-INTSVC"
         dependsOn: "Precheck"
       - deployment: "nonprod_github_network"
-        environment: "nonprod"
+        environment: "stg"
         component: "network"
         service_connection: "HMCTS-HUB-NONPROD-INTSVC"
         dependsOn: "sandbox_github_network"
