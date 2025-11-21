@@ -72,7 +72,7 @@ stages:
 
   - ${{ each deployment in parameters.environment_components }}:
     - stage: ${{ deployment.deployment }}
-      dependsOn: Precheck
+      dependsOn: ${{ deployment.dependsOn }}
       jobs:
         - job: TerraformPlanApply
           pool: hmcts-cftptl-agent-pool
