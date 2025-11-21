@@ -12,7 +12,7 @@ module "networking" {
       address_space = [var.vnet_address_space]
       subnets = {
         github = {
-          address_prefixes = var.vnet_address_space
+          address_prefixes = [var.vnet_address_space]
           delegations = {
             containerapps = {
               service_name = "Microsoft.App/environments"
