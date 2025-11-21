@@ -15,7 +15,7 @@ module "networking" {
           address_prefixes = [var.vnet_address_space]
           delegations = {
             containerapps = {
-              service_name = "Microsoft.App/environments"
+              service_name = "GitHub.Network/networkSettings"
               actions      = ["Microsoft.Network/virtualNetworks/subnets/join/action"]
             }
           }
