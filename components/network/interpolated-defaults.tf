@@ -10,8 +10,8 @@ data "azurerm_client_config" "current" {}
 data "azurerm_subscription" "current" {}
 
 data "azurerm_key_vault" "hub_infra_kv" {
-  name                = "hmcts-infra-dmz-${var.env}-int"
-  resource_group_name = "hmcts-infra-dmz-${var.env}-int"
+  name                = var.key_vault.name
+  resource_group_name = var.key_vault.rg_name
 }
 
 data "azurerm_key_vault_secret" "github_database_id" {

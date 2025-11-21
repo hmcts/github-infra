@@ -27,3 +27,11 @@ variable "env" {
   description = "The environment (e.g., dev, test, prod)"
   type        = string
 }
+
+variable "key_vault" {
+  description = "Key Vault details containing required secrets."
+  type = object({
+    name    = string
+    rg_name = string
+  })
+}

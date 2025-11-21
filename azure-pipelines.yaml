@@ -43,7 +43,7 @@ parameters:
         environment: "nonprod"
         component: "network"
         service_connection: "HMCTS-HUB-NONPROD-INTSVC"
-        dependsOn: "Precheck"
+        dependsOn: "sandbox_github_network"
 
 variables:
   - name: timeoutInMinutes
