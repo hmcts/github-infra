@@ -9,6 +9,6 @@ next_hop_ip_address     = "10.11.72.36"
 env                     = "nonprod"
 
 key_vault = {
-  name    = "hmcts-hub-infra-nonprodi"
-  rg_name = "hmcts-hub-infra-nonprodi"
+  name    = "hmcts-infra-dmz-nonprodi"
+  rg_name = "hmcts-infra-dmz-nonprodi"
 }
