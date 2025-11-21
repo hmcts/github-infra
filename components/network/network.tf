@@ -4,7 +4,7 @@ module "networking" {
   env         = var.env
   product     = var.product
   common_tags = module.ctags.common_tags
-  component   = "network"
+  component   = "github-network"
   location    = var.location
 
   vnets = {
