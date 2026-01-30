@@ -44,6 +44,11 @@ parameters:
         component: "network"
         service_connection: "HMCTS-HUB-NONPROD-INTSVC"
         dependsOn: "sandbox_github_network"
+      - deployment: "prod_github_network"
+        environment: "prod"
+        component: "network"
+        service_connection: "HMCTS-HUB-PROD-INTSVC"
+        dependsOn: "nonprod_github_network"
 
 variables:
   - name: timeoutInMinutes
