@@ -37,16 +37,17 @@ parameters:
       - deployment: "sandbox_github_network"
         environment: "sbox"
         component: "network"
-        service_connection: "HMCTS-HUB-SBOX-INTSVC"
+        service_connection: "HMCTS-HUB-SBOX-INTSVC-WIF"
         dependsOn: "Precheck"
       - deployment: "nonprod_github_network"
         environment: "stg"
         component: "network"
-        service_connection: "HMCTS-HUB-NONPROD-INTSVC"
+        service_connection: "HMCTS-HUB-NONPROD-INTSVC-WIF"
         dependsOn: "sandbox_github_network"
       - deployment: "prod_github_network"
         environment: "prod"
         component: "network"
+        # TODO: switch to -WIF after it has been added as part of: https://hmcts.atlassian.net/browse/DTSPO-35711
         service_connection: "HMCTS-HUB-PROD-INTSVC"
         dependsOn: "nonprod_github_network"
 
@@ -91,3 +92,12 @@ stages:
                 serviceConnection: ${{ deployment.service_connection }}
                 product: ${{ variables.product }}
                 terraformInitSubscription: ${{ variables.terraformInitSubscription }}
+                # Workaround to an issue with azapi provider and WIF-based Service Connection on our AKS agents
+                # This flag enables the fallback to generate ID token for azapi provider when using WIF-based Service Connection on AKS agents
+                # OIDC Token is the first credential in the chain used by azapi so it will always be tried first
+                # Meanwhile, the OIDC Request/refresh token credential is tried after file-token OIDC credentials and only if they haven't been set
+                # On AKS agent where we have Workload Identity credentials injected these will always be set
+                # This causes azapi to always try and use Workload Identity credentials instead of the correct ADO credentials and always fail authentication to Entra.
+                # The downside to this workaround is that this token is issued at the start of this stage and never refreshed so there is a risk of random timeouts occurring during long-running operations.
+                # Link to Issue on azapi Provider GitHub: https://github.com/Azure/terraform-provider-azapi/issues/1264
+                fallbackGenerateIdToken: true
