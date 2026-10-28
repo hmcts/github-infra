@@ -47,8 +47,7 @@ parameters:
       - deployment: "prod_github_network"
         environment: "prod"
         component: "network"
-        # TODO: switch to -WIF after it has been added as part of: https://hmcts.atlassian.net/browse/DTSPO-35711
-        service_connection: "HMCTS-HUB-PROD-INTSVC"
+        service_connection: "HMCTS-HUB-PROD-INTSVC-WIF"
         dependsOn: "nonprod_github_network"
 
 variables:
