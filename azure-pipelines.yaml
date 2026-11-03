@@ -19,7 +19,7 @@ resources:
   repositories:
     - repository: cnp-azuredevops-libraries
       type: github
-      ref: refs/heads/master
+      ref: refs/heads/feat/DTSPO-34384-service-connection-nagger
       name: hmcts/cnp-azuredevops-libraries
       endpoint: "hmcts"
 
